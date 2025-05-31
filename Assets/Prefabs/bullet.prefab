@@ -104,7 +104,7 @@ MonoBehaviour:
   lifetime: 3
   targetLayers:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 64
   impactEffect: {fileID: 0}
   destroyOnImpact: 1
 --- !u!50 &-7004117211458638300

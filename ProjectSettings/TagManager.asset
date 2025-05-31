@@ -11,7 +11,7 @@ TagManager:
   - 
   - Water
   - UI
-  - 
+  - Entities
   - 
   - 
   - 
@@ -41,15 +41,15 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
-  - name: background
-    uniqueID: 495190979
-    locked: 0
-  - name: foreground
-    uniqueID: 3767718939
-    locked: 0
   - name: terrain
     uniqueID: 792051871
     locked: 0
   - name: player
     uniqueID: 3104043455
+    locked: 0
+  - name: background
+    uniqueID: 495190979
+    locked: 0
+  - name: foreground
+    uniqueID: 3767718939
     locked: 0

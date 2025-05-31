@@ -78,13 +78,6 @@ public class Bullet : MonoBehaviour
         Vector2 impactPoint = transform.position;
         Vector2 impactDirection = direction;
         
-        // Try to get a more accurate impact point from the collider
-        Vector2 closestPoint = other.ClosestPoint(transform.position);
-        if (closestPoint != (Vector2)transform.position)
-        {
-            impactPoint = closestPoint;
-        }
-        
         // Check if target can take damage
         IDamageable damageable = other.GetComponent<IDamageable>();
         if (damageable != null)

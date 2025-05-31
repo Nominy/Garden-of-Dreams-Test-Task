@@ -4,7 +4,6 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float jumpForce = 10f;
     [SerializeField] private VirtualJoystick joystick;
     
     [Header("Ground Check")]
@@ -40,11 +39,11 @@ public class PlayerController : MonoBehaviour
         }
     }
     
-    void Update()
+    void FixedUpdate()
     {
         CheckGrounded();
-        HandleMovement();
         HandleAnimations();
+        HandleMovement();
     }
     
     private void CheckGrounded()
@@ -58,7 +57,14 @@ public class PlayerController : MonoBehaviour
         
         // Handle horizontal movement
         float horizontalInput = moveDirection.x;
-        rb.velocity = new Vector2(horizontalInput * moveSpeed, rb.velocity.y);
+        const int PPU = 32;
+        rb.position = new Vector2(
+            Mathf.Round(rb.position.x * PPU) / PPU,
+            rb.position.y );
+        rb.velocity = new Vector2(
+            Mathf.Round(horizontalInput * moveSpeed) / PPU,
+            rb.velocity.y);
+
         
         // Store movement state for animations
         isMovingHorizontally = Mathf.Abs(horizontalInput) > animationDeadzone;
@@ -85,29 +91,16 @@ public class PlayerController : MonoBehaviour
     {
         if (animator == null) return;
         
-        // Set standard animation parameters
         animator.SetBool(ANIM_IS_WALKING, isMovingHorizontally && isGrounded);
         animator.SetBool(ANIM_IS_GROUNDED, isGrounded);
         animator.SetFloat(ANIM_VERTICAL_VELOCITY, rb.velocity.y);
         
-        // Method 1: Use boolean parameter for facing direction
         animator.SetBool(ANIM_FACING_RIGHT, facingRight);
         
-        // Method 2: Alternative - Use signed horizontal speed
-        // This allows the animator to handle direction more smoothly
         float signedHorizontalSpeed = facingRight ? Mathf.Abs(rb.velocity.x) : -Mathf.Abs(rb.velocity.x);
         animator.SetFloat(ANIM_HORIZONTAL_SPEED, signedHorizontalSpeed);
     }
     
-    // Public methods for other scripts to trigger animations
-    public void Jump()
-    {
-        if (isGrounded && animator != null)
-        {
-            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
-            animator.SetTrigger("jump");
-        }
-    }
     
     public void TriggerAttack()
     {
