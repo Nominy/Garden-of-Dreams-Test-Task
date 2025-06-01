@@ -1,14 +1,10 @@
 using UnityEngine;
 
-public class ItemPickup : MonoBehaviour
+public class ItemPickup : MonoBehaviour, ISaveable
 {
     [Header("Item Data")]
-    private InventoryItem item;
-    [SerializeField] private string itemName = "Default Item";
-    [SerializeField] private Sprite itemSprite;
-    [SerializeField] private int itemId = 1;
+    [SerializeField] private ItemData itemData;
     [SerializeField] private int quantity = 1;
-    [SerializeField] private int maxStackSize = 99;
     
     [Header("Pickup Settings")]
     [SerializeField] private bool destroyOnPickup = true;
@@ -23,19 +19,36 @@ public class ItemPickup : MonoBehaviour
     
     private Vector3 startPosition;
     private AudioSource audioSource;
+    private InventoryItem cachedItem;
     
-    public InventoryItem Item => item;
+    /// <summary>
+    /// Get the current InventoryItem representation of this pickup
+    /// </summary>
+    public InventoryItem Item 
+    { 
+        get 
+        { 
+            if (cachedItem == null && itemData != null)
+                cachedItem = itemData.CreateInventoryItem(quantity);
+            return cachedItem;
+        } 
+    }
+    
+    /// <summary>
+    /// Get the ItemData asset this pickup represents
+    /// </summary>
+    public ItemData ItemData => itemData;
     
     void Start()
     {
-        CreateItem();
-        
         SetupVisuals();
         
         audioSource = GetComponent<AudioSource>();
         
         // Store starting position for bobbing animation
         startPosition = transform.position;
+        
+        ValidateSetup();
     }
     
     void Update()
@@ -46,9 +59,19 @@ public class ItemPickup : MonoBehaviour
         }
     }
     
-    private void CreateItem()
+    private void ValidateSetup()
     {
-        item = new InventoryItem(itemName, itemSprite, itemId, quantity, maxStackSize);
+        if (itemData == null && cachedItem == null)
+        {
+            Debug.LogError($"ItemPickup '{gameObject.name}' has no ItemData assigned and no cached item!", this);
+            return;
+        }
+        
+        if (quantity <= 0)
+        {
+            Debug.LogWarning($"ItemPickup '{gameObject.name}' has invalid quantity ({quantity}). Setting to 1.", this);
+            quantity = 1;
+        }
     }
     
     private void SetupVisuals()
@@ -59,14 +82,23 @@ public class ItemPickup : MonoBehaviour
             spriteRenderer = GetComponent<SpriteRenderer>();
         }
         
-        // Set sprite if available
-        if (spriteRenderer != null && item != null && item.ItemSprite != null)
+        if (spriteRenderer != null)
         {
-            spriteRenderer.sprite = item.ItemSprite;
-        }
-        else if (spriteRenderer != null && itemSprite != null)
-        {
-            spriteRenderer.sprite = itemSprite;
+            // Try to set sprite from ItemData first
+            if (itemData != null && itemData.itemSprite != null)
+            {
+                spriteRenderer.sprite = itemData.itemSprite;
+            }
+            // If no ItemData, try to use cached item sprite (for runtime items)
+            else if (cachedItem != null && cachedItem.ItemSprite != null)
+            {
+                spriteRenderer.sprite = cachedItem.ItemSprite;
+            }
+            // If neither, show warning
+            else if (itemData == null && cachedItem == null)
+            {
+                Debug.LogWarning($"ItemPickup '{gameObject.name}' has no ItemData or cached item for sprite setup.", this);
+            }
         }
     }
     
@@ -122,60 +154,134 @@ public class ItemPickup : MonoBehaviour
     }
     
     /// <summary>
-    /// Set up this pickup with specific item data
+    /// Set up this pickup with specific ItemData and quantity
     /// </summary>
-    /// <param name="itemName">Name of the item</param>
-    /// <param name="sprite">Sprite for the item</param>
-    /// <param name="id">Unique ID for the item</param>
-    public void SetupItem(string itemName, Sprite sprite, int id)
+    public void SetupItem(ItemData newItemData, int newQuantity = 1)
     {
-        SetupItem(itemName, sprite, id, 1, 99);
-    }
-    
-    /// <summary>
-    /// Set up this pickup with specific item data including quantity
-    /// </summary>
-    /// <param name="itemName">Name of the item</param>
-    /// <param name="sprite">Sprite for the item</param>
-    /// <param name="id">Unique ID for the item</param>
-    /// <param name="quantity">Quantity of the item</param>
-    /// <param name="maxStackSize">Maximum stack size for the item</param>
-    public void SetupItem(string itemName, Sprite sprite, int id, int quantity, int maxStackSize)
-    {
-        this.itemName = itemName;
-        this.itemSprite = sprite;
-        this.itemId = id;
-        this.quantity = quantity;
-        this.maxStackSize = maxStackSize;
+        itemData = newItemData;
+        quantity = newQuantity;
+        cachedItem = null; // Clear cache
         
-        CreateItem();
         SetupVisuals();
+        ValidateSetup();
     }
     
     /// <summary>
     /// Set up this pickup with an existing InventoryItem
     /// </summary>
-    /// <param name="inventoryItem">The item to represent</param>
     public void SetupItem(InventoryItem inventoryItem)
     {
-        if (inventoryItem == null) return;
+        if (inventoryItem == null) 
+        {
+            Debug.LogError("Cannot setup ItemPickup with null InventoryItem!");
+            return;
+        }
         
-        item = new InventoryItem(inventoryItem);
-        itemName = inventoryItem.ItemName;
-        itemSprite = inventoryItem.ItemSprite;
-        itemId = inventoryItem.ItemId;
+        // Store the inventory item directly and quantity
         quantity = inventoryItem.Quantity;
-        maxStackSize = inventoryItem.MaxStackSize;
+        cachedItem = new InventoryItem(inventoryItem);
         
-        SetupVisuals();
+        // For runtime-created items (like loot drops), we don't have ItemData
+        // So we'll work directly with the cached InventoryItem
+        itemData = null; // Explicitly set to null for runtime items
+        
+        // Set up visuals directly from the InventoryItem
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.sprite = inventoryItem.ItemSprite;
+        }
+        
+        Debug.Log($"ItemPickup setup with runtime InventoryItem: {inventoryItem.ItemName} x{inventoryItem.Quantity}");
     }
     
     // For debugging in the editor
     void OnValidate()
     {
-        if (item == null && !string.IsNullOrEmpty(itemName) && itemSprite != null)
+        if (itemData != null)
         {
-            CreateItem();
+            SetupVisuals();
+        }
+        
+        if (quantity <= 0)
+            quantity = 1;
+    }
+    
+    #region ISaveable Implementation
+    
+    public string GetSaveId()
+    {
+        Vector2 pos = transform.position;
+        int dataId = itemData != null ? itemData.itemId : 0;
+        return $"item_{dataId}_{pos.x:F1}_{pos.y:F1}_{GetInstanceID()}";
+    }
+    
+    public object GetSaveData()
+    {
+        return new ItemPickupSaveDataDetailed
+        {
+            position = transform.position,
+            isPickedUp = !gameObject.activeInHierarchy || !gameObject.activeSelf,
+            itemData = SerializableInventoryItem.FromInventoryItem(Item),
+            destroyOnPickup = destroyOnPickup,
+            bobUpAndDown = bobUpAndDown,
+            bobSpeed = bobSpeed,
+            bobHeight = bobHeight,
+            startPosition = startPosition
+        };
+    }
+    
+    public void LoadSaveData(object data)
+    {
+        if (data is ItemPickupSaveDataDetailed saveData)
+        {
+            // Restore position
+            transform.position = saveData.position;
+            startPosition = saveData.startPosition;
+            
+            // Restore item data
+            if (saveData.itemData != null)
+            {
+                quantity = saveData.itemData.quantity;
+                cachedItem = saveData.itemData.ToInventoryItem();
+                
+                SetupVisuals();
+            }
+            
+            // Restore pickup state
+            if (saveData.isPickedUp)
+            {
+                gameObject.SetActive(false);
+            }
+            else
+            {
+                gameObject.SetActive(true);
+                
+                // Restore settings
+                destroyOnPickup = saveData.destroyOnPickup;
+                bobUpAndDown = saveData.bobUpAndDown;
+                bobSpeed = saveData.bobSpeed;
+                bobHeight = saveData.bobHeight;
+            }
+            
+            Debug.Log($"ItemPickup data loaded: Item={itemData?.itemName}, Quantity={quantity}, Position={transform.position}, PickedUp={saveData.isPickedUp}");
         }
     }
+    
+    #endregion
+}
+
+/// <summary>
+/// Detailed save data for ItemPickup
+/// </summary>
+[System.Serializable]
+public class ItemPickupSaveDataDetailed
+{
+    public Vector3 position;
+    public bool isPickedUp;
+    public SerializableInventoryItem itemData;
+    public bool destroyOnPickup;
+    public bool bobUpAndDown;
+    public float bobSpeed;
+    public float bobHeight;
+    public Vector3 startPosition;
 } 

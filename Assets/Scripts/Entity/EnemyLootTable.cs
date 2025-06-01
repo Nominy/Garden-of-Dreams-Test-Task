@@ -8,10 +8,8 @@ public class EnemyLootTable : ScriptableObject
     [System.Serializable]
     public class LootEntry
     {
-        [Header("Item Info")]
-        public string itemName = "Item";
-        public Sprite itemSprite;
-        public int itemId = 1;
+        [Header("Item Data")]
+        public ItemData itemData; // Direct reference to ItemData ScriptableObject
         
         [Header("Drop Settings")]
         [Range(0f, 100f)]
@@ -20,15 +18,20 @@ public class EnemyLootTable : ScriptableObject
         [Header("Quantity")]
         public int minQuantity = 1;
         public int maxQuantity = 1;
-        public int maxStackSize = 99;
         
         [Header("Conditions")]
         public bool guaranteedDrop = false; // Always drops regardless of chance
         
         public InventoryItem CreateItem()
         {
+            if (itemData == null)
+            {
+                Debug.LogError("LootEntry: ItemData is not assigned!");
+                return null;
+            }
+
             int quantity = Random.Range(minQuantity, maxQuantity + 1);
-            return new InventoryItem(itemName, itemSprite, itemId, quantity, maxStackSize);
+            return itemData.CreateInventoryItem(quantity);
         }
         
         public bool ShouldDrop()
@@ -50,7 +53,11 @@ public class EnemyLootTable : ScriptableObject
         var guaranteedEntries = availableEntries.Where(entry => entry.guaranteedDrop).ToList();
         foreach (var entry in guaranteedEntries)
         {
-            droppedItems.Add(entry.CreateItem());
+            var item = entry.CreateItem();
+            if (item != null)
+            {
+                droppedItems.Add(item);
+            }
             availableEntries.Remove(entry);
         }
         
@@ -70,7 +77,11 @@ public class EnemyLootTable : ScriptableObject
         {
             if (entry.ShouldDrop())
             {
-                droppedItems.Add(entry.CreateItem());
+                var item = entry.CreateItem();
+                if (item != null)
+                {
+                    droppedItems.Add(item);
+                }
                 availableEntries.Remove(entry);
             }
         }
@@ -119,6 +130,21 @@ public class EnemyLootTable : ScriptableObject
             Debug.Log($"Guaranteed Drops: {GetGuaranteedDropCount()}");
             Debug.Log($"Total Drop Chance: {GetTotalDropChance():F1}%");
         }
+        
+        // Validate all entries
+        foreach (var entry in lootEntries)
+        {
+            if (entry.itemData == null)
+            {
+                Debug.LogWarning($"Loot Table '{name}' has an entry with no ItemData assigned!", this);
+            }
+            
+            if (entry.minQuantity <= 0)
+                entry.minQuantity = 1;
+                
+            if (entry.maxQuantity < entry.minQuantity)
+                entry.maxQuantity = entry.minQuantity;
+        }
     }
     
     // Test method to simulate drops (for debugging in editor)
@@ -129,7 +155,10 @@ public class EnemyLootTable : ScriptableObject
         Debug.Log($"Test drop from {name}: {drops.Count} items dropped");
         foreach (var item in drops)
         {
-            Debug.Log($"- {item.ItemName} x{item.Quantity}");
+            if (item != null)
+            {
+                Debug.Log($"- {item.ItemName} x{item.Quantity}");
+            }
         }
     }
 } 

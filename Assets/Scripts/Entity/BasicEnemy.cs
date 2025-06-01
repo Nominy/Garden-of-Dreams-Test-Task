@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections;
 
-public class BasicEnemy : DamageableEntity
+public class BasicEnemy : DamageableEntity, ISaveable
 {
     [Header("Enemy Behavior")]
     [SerializeField] private float detectionRange = 5f;
@@ -68,6 +68,17 @@ public class BasicEnemy : DamageableEntity
     
     void Update()
     {
+        if (rb == null) // Defensive check and re-fetch
+        {
+            rb = GetComponent<Rigidbody2D>();
+            if (rb == null)
+            {
+                Debug.LogError($"Critical: Rigidbody2D still not found on {gameObject.name} in Update. Disabling enemy.");
+                enabled = false; // Disable this script to prevent further errors
+                return;
+            }
+        }
+
         if (!IsAlive || player == null) return;
         
         CheckPlayerDistance();
@@ -267,4 +278,105 @@ public class BasicEnemy : DamageableEntity
         if (OnDeath != null)
             OnDeath -= DropLoot;
     }
+    
+    #region ISaveable Implementation
+    
+    public string GetSaveId()
+    {
+        // Generate a unique ID based on position and instance ID
+        // This ensures enemies can be consistently identified across saves
+        Vector2 pos = transform.position;
+        return $"enemy_{GetInstanceID()}_{pos.x:F1}_{pos.y:F1}";
+    }
+    
+    public object GetSaveData()
+    {
+        return new BasicEnemySaveData
+        {
+            position = transform.position,
+            currentHealth = Health,
+            maxHealth = MaxHealth,
+            isAlive = IsAlive,
+            isActive = gameObject.activeInHierarchy,
+            facingRight = facingRight,
+            playerInRange = playerInRange,
+            // Save enemy stats
+            detectionRange = detectionRange,
+            attackRange = attackRange,
+            moveSpeed = moveSpeed,
+            attackDamage = attackDamage,
+            attackCooldown = attackCooldown
+        };
+    }
+    
+    public void LoadSaveData(object data)
+    {
+        if (data is BasicEnemySaveData saveData)
+        {
+            // Restore position
+            transform.position = saveData.position;
+            
+            // Restore health
+            SetHealth(saveData.currentHealth);
+            SetMaxHealth(saveData.maxHealth);
+            
+            // Restore state
+            gameObject.SetActive(saveData.isActive);
+            facingRight = saveData.facingRight;
+            playerInRange = saveData.playerInRange;
+            
+            // Always reset canAttack to true when loading
+            // This prevents getting stuck in "can't attack" state if save/load happened during attack coroutine
+            canAttack = true;
+            
+            // Restore stats (in case they were modified during gameplay)
+            detectionRange = saveData.detectionRange;
+            attackRange = saveData.attackRange;
+            moveSpeed = saveData.moveSpeed;
+            attackDamage = saveData.attackDamage;
+            attackCooldown = saveData.attackCooldown;
+            
+            // Handle death state
+            if (!saveData.isAlive && IsAlive)
+            {
+                TakeDamage(Health, Vector2.zero, Vector2.zero);
+            }
+            else if (saveData.isAlive && !IsAlive)
+            {
+                Revive(saveData.currentHealth / saveData.maxHealth);
+            }
+            
+            // Update visual state
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.flipX = !facingRight;
+            }
+            
+            Debug.Log($"BasicEnemy data loaded: Health={Health}/{MaxHealth}, Position={transform.position}, Alive={IsAlive}");
+        }
+    }
+    
+    #endregion
+}
+
+/// <summary>
+/// Save data structure for BasicEnemy
+/// </summary>
+[System.Serializable]
+public class BasicEnemySaveData
+{
+    public Vector3 position;
+    public float currentHealth;
+    public float maxHealth;
+    public bool isAlive;
+    public bool isActive;
+    public bool facingRight;
+    public bool playerInRange;
+    
+    // Enemy stats
+    public float detectionRange;
+    public float attackRange;
+    public float moveSpeed;
+    public float attackDamage;
+    public float attackCooldown;
 } 

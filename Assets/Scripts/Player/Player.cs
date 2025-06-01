@@ -1,10 +1,11 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Main Player class that inherits from DamageableEntity and coordinates all player controllers.
 /// This is the central hub for all player functionality.
 /// </summary>
-public class Player : DamageableEntity
+public class Player : DamageableEntity, ISaveable
 {
     [Header("Player Controllers")]
     [SerializeField] private PlayerMovementController movementController;
@@ -122,8 +123,15 @@ public class Player : DamageableEntity
                 controller.enabled = false;
         }
         
-        // You can add game over logic here
-        // GameManager.Instance.GameOver();
+        // Trigger game over
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.GameOver();
+        }
+        else
+        {
+            Debug.LogWarning("GameManager not found! Game over not triggered.");
+        }
     }
     
     // Public methods for external systems to interact with the player
@@ -203,4 +211,163 @@ public class Player : DamageableEntity
         if (OnDeath != null)
             OnDeath -= HandlePlayerDeath;
     }
+    
+    #region ISaveable Implementation
+    
+    public string GetSaveId()
+    {
+        // Player should have a consistent ID since there's only one player
+        return "player_main";
+    }
+    
+    public object GetSaveData()
+    {
+        // Collect inventory data
+        var inventoryItems = new List<SerializableInventoryItem>();
+        if (inventoryController != null)
+        {
+            var inventorySystem = inventoryController.GetInventorySystem();
+            if (inventorySystem != null)
+            {
+                var items = inventorySystem.GetAllItems();
+                Debug.Log($"Player.GetSaveData: Found {items.Count} total inventory slots");
+                
+                int nonNullCount = 0;
+                foreach (var item in items)
+                {
+                    if (item != null)
+                    {
+                        nonNullCount++;
+                        inventoryItems.Add(SerializableInventoryItem.FromInventoryItem(item));
+                        Debug.Log($"Player.GetSaveData: Saving item {item.ItemName} x{item.Quantity}");
+                    }
+                    // Skip null items entirely - we don't need to maintain slot positions in save data
+                }
+                Debug.Log($"Player.GetSaveData: Saved {nonNullCount} items to inventory data");
+            }
+            else
+            {
+                Debug.LogWarning("Player.GetSaveData: InventorySystem not found via inventoryController.GetInventorySystem()!");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("Player.GetSaveData: inventoryController is null!");
+        }
+        
+        // Get weapon ammo data
+        int currentAmmo = 0;
+        int maxAmmo = 0;
+        if (weaponController?.CurrentWeapon != null)
+        {
+            currentAmmo = weaponController.CurrentWeapon.CurrentAmmo;
+            maxAmmo = weaponController.CurrentWeapon.MaxAmmo;
+        }
+
+        return new PlayerSaveDataDetailed
+        {
+            position = Position,
+            currentHealth = Health,
+            maxHealth = MaxHealth,
+            isAlive = IsAlive,
+            facingRight = FacingRight,
+            inventoryItems = inventoryItems,
+            maxInventorySlots = inventoryController?.GetInventorySystem()?.MaxSlots ?? 20,
+            currentAmmo = currentAmmo,
+            maxAmmo = maxAmmo,
+            hasWeapon = weaponController?.HasWeapon ?? false
+        };
+    }
+    
+    public void LoadSaveData(object data)
+    {
+        if (data is PlayerSaveDataDetailed saveData)
+        {
+            // Restore position
+            transform.position = saveData.position;
+            
+            // Restore health
+            SetHealth(saveData.currentHealth);
+            SetMaxHealth(saveData.maxHealth);
+            
+            // Handle death state
+            if (!saveData.isAlive && IsAlive)
+            {
+                TakeDamage(Health, Vector2.zero, Vector2.zero);
+            }
+            else if (saveData.isAlive && !IsAlive)
+            {
+                Revive(saveData.currentHealth / saveData.maxHealth);
+            }
+            
+            // Restore facing direction
+            if (movementController != null && saveData.facingRight != FacingRight)
+            {
+                // This depends on your movement controller implementation
+                // You might need to adjust this based on how facing direction is handled
+            }
+            
+            // Restore inventory
+            if (inventoryController != null && saveData.inventoryItems != null)
+            {
+                var inventorySystem = inventoryController.GetInventorySystem();
+                if (inventorySystem != null)
+                {
+                    // Clear current inventory
+                    var currentItems = inventorySystem.GetAllItems();
+                    for (int i = 0; i < currentItems.Count; i++)
+                    {
+                        if (currentItems[i] != null)
+                        {
+                            inventorySystem.RemoveItemAt(i);
+                        }
+                    }
+                    
+                    // Load saved items (add them sequentially)
+                    foreach (var savedItem in saveData.inventoryItems)
+                    {
+                        if (savedItem != null)
+                        {
+                            var item = savedItem.ToInventoryItem();
+                            if (item != null)
+                            {
+                                inventorySystem.AddItem(item);
+                                Debug.Log($"Player.LoadSaveData: Loaded item {item.ItemName} x{item.Quantity}");
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Restore weapon ammo
+            if (weaponController?.CurrentWeapon != null && saveData.hasWeapon)
+            {
+                weaponController.CurrentWeapon.SetAmmo(saveData.currentAmmo);
+            }
+            
+            Debug.Log($"Player data loaded: Health={Health}/{MaxHealth}, Position={Position}, Alive={IsAlive}, Ammo={saveData.currentAmmo}/{saveData.maxAmmo}");
+        }
+    }
+    
+    #endregion
+}
+
+/// <summary>
+/// Detailed save data for Player including inventory and weapon ammo
+/// </summary>
+[System.Serializable]
+public class PlayerSaveDataDetailed
+{
+    public Vector2 position;
+    public float currentHealth;
+    public float maxHealth;
+    public bool isAlive;
+    public bool facingRight;
+    public List<SerializableInventoryItem> inventoryItems = new List<SerializableInventoryItem>();
+    public int maxInventorySlots;
+    
+    // Weapon data
+    public bool hasWeapon;
+    public int currentAmmo;
+    public int maxAmmo;
 } 
