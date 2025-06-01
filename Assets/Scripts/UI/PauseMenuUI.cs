@@ -26,10 +26,6 @@ public class PauseMenuUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI pauseTitle;
     [SerializeField] private TextMeshProUGUI gameTimeText;
     
-    [Header("Input")]
-    [SerializeField] private KeyCode pauseKey = KeyCode.Escape;
-    [SerializeField] private KeyCode pauseKeyAlt = KeyCode.P;
-    
     [Header("Animation")]
     [SerializeField] private float fadeInDuration = 0.3f;
     [SerializeField] private float fadeOutDuration = 0.2f;
@@ -67,15 +63,6 @@ public class PauseMenuUI : MonoBehaviour
         SetupButtonEvents();
         HidePauseMenu();
         LoadSettings();
-    }
-    
-    private void Update()
-    {
-        // Handle pause input
-        if (Input.GetKeyDown(pauseKey) || Input.GetKeyDown(pauseKeyAlt))
-        {
-            TogglePause();
-        }
     }
     
     private void SetupButtonEvents()
