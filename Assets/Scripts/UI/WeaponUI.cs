@@ -7,12 +7,7 @@ public class WeaponUI : MonoBehaviour
     [Header("Ammo Display")]
     [SerializeField] private TextMeshProUGUI ammoText;
     [SerializeField] private Image ammoBar;
-    [SerializeField] private string ammoFormat = "{0}/{1}"; // current/reserve format
-    
-    [Header("Reload Progress")]
-    [SerializeField] private GameObject reloadPanel;
-    [SerializeField] private Image reloadProgressBar;
-    [SerializeField] private TextMeshProUGUI reloadText;
+    [SerializeField] private string ammoFormat = "{0}"; // current ammo format
     
     [Header("Weapon Info")]
     [SerializeField] private TextMeshProUGUI weaponNameText;
@@ -26,7 +21,6 @@ public class WeaponUI : MonoBehaviour
     
     private PlayerWeaponController weaponController;
     private Weapon currentWeapon;
-    private Coroutine reloadCoroutine;
     
     void Start()
     {
@@ -41,18 +35,10 @@ public class WeaponUI : MonoBehaviour
         
         // Subscribe to weapon events
         weaponController.OnAmmoChanged += UpdateAmmoDisplay;
-        weaponController.OnReloadStarted += ShowReloadProgress;
-        weaponController.OnReloadFinished += HideReloadProgress;
-        
-        // Hide reload panel initially
-        if (reloadPanel != null)
-        {
-            reloadPanel.SetActive(false);
-        }
         
         // Initial setup
         UpdateWeaponInfo();
-        UpdateAmmoDisplay(0, 0); // Start with empty display
+        UpdateAmmoDisplay(0); // Start with empty display
     }
     
     void Update()
@@ -65,23 +51,23 @@ public class WeaponUI : MonoBehaviour
             
             if (currentWeapon != null)
             {
-                UpdateAmmoDisplay(currentWeapon.CurrentAmmo, currentWeapon.ReserveAmmo);
+                UpdateAmmoDisplay(currentWeapon.CurrentAmmo);
             }
             else
             {
-                UpdateAmmoDisplay(0, 0);
+                UpdateAmmoDisplay(0);
             }
         }
     }
     
-    private void UpdateAmmoDisplay(int currentAmmo, int reserveAmmo)
+    private void UpdateAmmoDisplay(int currentAmmo)
     {
         // Update ammo text
         if (ammoText != null)
         {
             if (currentWeapon != null)
             {
-                ammoText.text = string.Format(ammoFormat, currentAmmo, reserveAmmo);
+                ammoText.text = string.Format(ammoFormat, currentAmmo);
             }
             else
             {
@@ -160,81 +146,13 @@ public class WeaponUI : MonoBehaviour
         }
     }
     
-    private void ShowReloadProgress(float reloadDuration)
-    {
-        if (reloadPanel != null)
-        {
-            reloadPanel.SetActive(true);
-        }
-        
-        if (reloadCoroutine != null)
-        {
-            StopCoroutine(reloadCoroutine);
-        }
-        
-        reloadCoroutine = StartCoroutine(ReloadProgressCoroutine(reloadDuration));
-    }
-    
-    private void HideReloadProgress()
-    {
-        if (reloadPanel != null)
-        {
-            reloadPanel.SetActive(false);
-        }
-        
-        if (reloadCoroutine != null)
-        {
-            StopCoroutine(reloadCoroutine);
-            reloadCoroutine = null;
-        }
-    }
-    
-    private System.Collections.IEnumerator ReloadProgressCoroutine(float duration)
-    {
-        float elapsed = 0f;
-        
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float progress = elapsed / duration;
-            
-            // Update progress bar
-            if (reloadProgressBar != null)
-            {
-                reloadProgressBar.fillAmount = progress;
-            }
-            
-            // Update reload text
-            if (reloadText != null)
-            {
-                float timeRemaining = duration - elapsed;
-                reloadText.text = $"Reloading... {timeRemaining:F1}s";
-            }
-            
-            yield return null;
-        }
-        
-        // Ensure progress is complete
-        if (reloadProgressBar != null)
-        {
-            reloadProgressBar.fillAmount = 1f;
-        }
-        
-        if (reloadText != null)
-        {
-            reloadText.text = "Reload Complete!";
-        }
-        
-        reloadCoroutine = null;
-    }
-    
     // Public methods for external use
     public void SetAmmoFormat(string format)
     {
         ammoFormat = format;
         if (currentWeapon != null)
         {
-            UpdateAmmoDisplay(currentWeapon.CurrentAmmo, currentWeapon.ReserveAmmo);
+            UpdateAmmoDisplay(currentWeapon.CurrentAmmo);
         }
     }
     
@@ -243,7 +161,7 @@ public class WeaponUI : MonoBehaviour
         lowAmmoThreshold = Mathf.Clamp01(threshold);
         if (currentWeapon != null)
         {
-            UpdateAmmoDisplay(currentWeapon.CurrentAmmo, currentWeapon.ReserveAmmo);
+            UpdateAmmoDisplay(currentWeapon.CurrentAmmo);
         }
     }
     
@@ -253,8 +171,6 @@ public class WeaponUI : MonoBehaviour
         if (weaponController != null)
         {
             weaponController.OnAmmoChanged -= UpdateAmmoDisplay;
-            weaponController.OnReloadStarted -= ShowReloadProgress;
-            weaponController.OnReloadFinished -= HideReloadProgress;
         }
     }
 } 

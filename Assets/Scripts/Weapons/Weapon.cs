@@ -13,11 +13,8 @@ public class WeaponStats
     
     [Header("Ammo")]
     public int maxAmmo = 30;
-    public int maxReserveAmmo = 120;
-    public float reloadTime = 2f;
     
     [Header("Accuracy")]
-    public float spread = 0f; // Degrees of spread
     public float recoil = 0f; // Amount of recoil
 }
 
@@ -31,32 +28,24 @@ public class Weapon : MonoBehaviour
     [Header("Effects")]
     [SerializeField] private GameObject muzzleFlash;
     [SerializeField] private AudioClip fireSound;
-    [SerializeField] private AudioClip reloadSound;
     [SerializeField] private AudioClip emptySound;
     
     // Ammo system
     private int currentAmmo;
-    private int reserveAmmo;
-    private bool isReloading = false;
     
     // Firing system
     private float lastFireTime = 0f;
     private AudioSource audioSource;
     
     // Events
-    public System.Action<int, int> OnAmmoChanged; // currentAmmo, reserveAmmo
-    public System.Action<float> OnReloadStarted; // reload duration
-    public System.Action OnReloadFinished;
+    public System.Action<int> OnAmmoChanged; // currentAmmo only
     public System.Action OnWeaponFired;
     public System.Action OnWeaponEmpty;
     
     // Properties
     public int CurrentAmmo => currentAmmo;
-    public int ReserveAmmo => reserveAmmo;
     public int MaxAmmo => stats.maxAmmo;
-    public bool IsReloading => isReloading;
-    public bool CanFire => !isReloading && currentAmmo > 0 && Time.time >= lastFireTime + (1f / stats.fireRate);
-    public bool CanReload => !isReloading && currentAmmo < stats.maxAmmo && reserveAmmo > 0;
+    public bool CanFire => currentAmmo > 0 && Time.time >= lastFireTime + (1f / stats.fireRate);
     public WeaponStats Stats => stats;
     
     void Awake()
@@ -69,7 +58,6 @@ public class Weapon : MonoBehaviour
         
         // Initialize ammo
         currentAmmo = stats.maxAmmo;
-        reserveAmmo = stats.maxReserveAmmo;
         
         // Validate setup
         if (bulletPrefab == null)
@@ -84,7 +72,7 @@ public class Weapon : MonoBehaviour
         }
         
         // Notify UI of initial ammo state
-        OnAmmoChanged?.Invoke(currentAmmo, reserveAmmo);
+        OnAmmoChanged?.Invoke(currentAmmo);
     }
     
     public bool TryFire(Vector2 direction)
@@ -111,10 +99,7 @@ public class Weapon : MonoBehaviour
         
         // Consume ammo
         currentAmmo--;
-        OnAmmoChanged?.Invoke(currentAmmo, reserveAmmo);
-        
-        // Apply spread
-        Vector2 fireDirection = ApplySpread(direction);
+        OnAmmoChanged?.Invoke(currentAmmo);
         
         // Create bullet
         if (bulletPrefab != null)
@@ -124,7 +109,7 @@ public class Weapon : MonoBehaviour
             
             if (bullet != null)
             {
-                bullet.Initialize(fireDirection, stats.bulletSpeed, stats.damage, true);
+                bullet.Initialize(direction, stats.bulletSpeed, stats.damage, true);
             }
             else
             {
@@ -138,56 +123,6 @@ public class Weapon : MonoBehaviour
         
         // Trigger events
         OnWeaponFired?.Invoke();
-    }
-    
-    public bool TryReload()
-    {
-        if (!CanReload) return false;
-        
-        StartCoroutine(ReloadCoroutine());
-        return true;
-    }
-    
-    private System.Collections.IEnumerator ReloadCoroutine()
-    {
-        isReloading = true;
-        OnReloadStarted?.Invoke(stats.reloadTime);
-        
-        // Play reload sound
-        if (reloadSound != null)
-        {
-            audioSource.PlayOneShot(reloadSound);
-        }
-        
-        yield return new WaitForSeconds(stats.reloadTime);
-        
-        // Calculate how much ammo to reload
-        int ammoNeeded = stats.maxAmmo - currentAmmo;
-        int ammoToReload = Mathf.Min(ammoNeeded, reserveAmmo);
-        
-        // Update ammo counts
-        currentAmmo += ammoToReload;
-        reserveAmmo -= ammoToReload;
-        
-        isReloading = false;
-        
-        // Trigger events
-        OnAmmoChanged?.Invoke(currentAmmo, reserveAmmo);
-        OnReloadFinished?.Invoke();
-    }
-    
-    private Vector2 ApplySpread(Vector2 baseDirection)
-    {
-        if (stats.spread <= 0f) return baseDirection;
-        
-        // Calculate random spread angle
-        float spreadAngle = Random.Range(-stats.spread / 2f, stats.spread / 2f);
-        
-        // Convert direction to angle, apply spread, convert back
-        float baseAngle = Mathf.Atan2(baseDirection.y, baseDirection.x) * Mathf.Rad2Deg;
-        float finalAngle = (baseAngle + spreadAngle) * Mathf.Deg2Rad;
-        
-        return new Vector2(Mathf.Cos(finalAngle), Mathf.Sin(finalAngle));
     }
     
     private void PlayFireEffects()
@@ -215,25 +150,19 @@ public class Weapon : MonoBehaviour
     // Utility methods
     public void AddAmmo(int amount)
     {
-        reserveAmmo = Mathf.Min(reserveAmmo + amount, stats.maxReserveAmmo);
-        OnAmmoChanged?.Invoke(currentAmmo, reserveAmmo);
+        currentAmmo = Mathf.Min(currentAmmo + amount, stats.maxAmmo);
+        OnAmmoChanged?.Invoke(currentAmmo);
     }
     
-    public void SetAmmo(int current, int reserve)
+    public void SetAmmo(int amount)
     {
-        currentAmmo = Mathf.Clamp(current, 0, stats.maxAmmo);
-        reserveAmmo = Mathf.Clamp(reserve, 0, stats.maxReserveAmmo);
-        OnAmmoChanged?.Invoke(currentAmmo, reserveAmmo);
+        currentAmmo = Mathf.Clamp(amount, 0, stats.maxAmmo);
+        OnAmmoChanged?.Invoke(currentAmmo);
     }
     
-    // Auto-reload when empty (optional)
-    public void EnableAutoReload()
+    public void RefillAmmo()
     {
-        OnWeaponEmpty += () => {
-            if (CanReload)
-            {
-                TryReload();
-            }
-        };
+        currentAmmo = stats.maxAmmo;
+        OnAmmoChanged?.Invoke(currentAmmo);
     }
 } 

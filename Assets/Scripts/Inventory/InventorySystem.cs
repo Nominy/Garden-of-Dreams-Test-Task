@@ -9,13 +9,10 @@ public class InventorySystem : MonoBehaviour
     [SerializeField] private GameObject slotPrefab;
     
     [Header("Click Settings")]
-    [SerializeField] private float doubleClickTime = 0.5f;
     
     private List<InventoryItem> items = new List<InventoryItem>();
     private List<InventorySlot> slots = new List<InventorySlot>();
     private InventorySlot selectedSlot;
-    private float lastClickTime;
-    private InventorySlot lastClickedSlot;
     
     // Events for external systems
     public System.Action<InventoryItem> OnItemAdded;
@@ -274,29 +271,24 @@ public class InventorySystem : MonoBehaviour
     /// <param name="clickedSlot">The slot that was clicked</param>
     public void OnSlotClicked(InventorySlot clickedSlot)
     {
-        if (!clickedSlot.HasItem) return;
-        
-        float currentTime = Time.time;
-        bool isDoubleClick = (clickedSlot == lastClickedSlot) && 
-                           (currentTime - lastClickTime < doubleClickTime);
-        
-        if (isDoubleClick)
+        if (!clickedSlot.HasItem && selectedSlot == null && !clickedSlot.IsSelected)
         {
-            // Double click - delete item
-            int slotIndex = slots.IndexOf(clickedSlot);
-            if (slotIndex >= 0)
-            {
-                RemoveItemAt(slotIndex);
-            }
+            // If the clicked slot is empty and no slot is currently selected,
+            // and the clicked slot itself is not marked as selected (e.g. from a previous action),
+            // there's nothing to do.
+            return;
+        }
+
+        if (selectedSlot == clickedSlot)
+        {
+            // Clicking the already selected slot deselects it.
+            ClearSelection();
         }
         else
         {
-            // Single click - select item
+            // Clicking a new slot selects it.
             SetSelectedSlot(clickedSlot);
         }
-        
-        lastClickedSlot = clickedSlot;
-        lastClickTime = currentTime;
     }
     
     private void SetSelectedSlot(InventorySlot slot)
@@ -321,6 +313,21 @@ public class InventorySystem : MonoBehaviour
         {
             selectedSlot.SetSelected(false);
             selectedSlot = null;
+        }
+    }
+    
+    public void RequestDeleteItemInSlot(InventorySlot slot)
+    {
+        if (slot == null || !slots.Contains(slot))
+        {
+            Debug.LogWarning("RequestDeleteItemInSlot: Slot not found in inventory system.");
+            return;
+        }
+
+        int slotIndex = slots.IndexOf(slot);
+        if (slotIndex != -1)
+        {
+            RemoveItemAt(slotIndex); // Remove entire stack from this slot
         }
     }
     

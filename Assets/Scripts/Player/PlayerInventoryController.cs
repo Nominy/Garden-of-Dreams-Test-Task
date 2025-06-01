@@ -1,6 +1,10 @@
 using UnityEngine;
 
-public class PlayerInventoryController : MonoBehaviour
+/// <summary>
+/// Handles player inventory management and item pickup.
+/// Refactored to work with the new Player architecture.
+/// </summary>
+public class PlayerInventoryController : PlayerControllerBase
 {
     [Header("Inventory References")]
     [SerializeField] private InventorySystem inventorySystem;
@@ -8,19 +12,24 @@ public class PlayerInventoryController : MonoBehaviour
     [Header("Input Settings")]
     [SerializeField] private GameObject inventoryUI;
     
-    void Start()
+    protected override void OnInitialize()
     {
         if (inventorySystem == null)
         {
             inventorySystem = FindObjectOfType<InventorySystem>();
         }
+        
+        if (inventorySystem == null)
+        {
+            Debug.LogWarning("PlayerInventoryController: No InventorySystem found in scene!");
+        }
     }
         
     public bool AddItem(InventoryItem item)
     {
-        if (inventorySystem == null)
+        if (!IsReady || inventorySystem == null)
         {
-            Debug.LogWarning("No inventory system assigned to PlayerInventoryController!");
+            Debug.LogWarning("PlayerInventoryController: Cannot add item - controller not ready or no inventory system!");
             return false;
         }
         
@@ -29,9 +38,9 @@ public class PlayerInventoryController : MonoBehaviour
     
     public bool AddItem(InventoryItem item, int quantity)
     {
-        if (inventorySystem == null)
+        if (!IsReady || inventorySystem == null)
         {
-            Debug.LogWarning("No inventory system assigned to PlayerInventoryController!");
+            Debug.LogWarning("PlayerInventoryController: Cannot add item - controller not ready or no inventory system!");
             return false;
         }
         
@@ -54,7 +63,7 @@ public class PlayerInventoryController : MonoBehaviour
     
     public bool HasInventorySpace()
     {
-        return inventorySystem != null && inventorySystem.HasSpace();
+        return IsReady && inventorySystem != null && inventorySystem.HasSpace();
     }
     
     public InventorySystem GetInventorySystem()
@@ -64,18 +73,22 @@ public class PlayerInventoryController : MonoBehaviour
     
     void OnTriggerEnter2D(Collider2D other)
     {
-        Debug.Log("OnTriggerEnter2D");
+        if (!IsReady) return;
+        
+        if (enableDebugLogs)
+            Debug.Log("PlayerInventoryController: OnTriggerEnter2D");
+            
         ItemPickup itemPickup = other.GetComponent<ItemPickup>();
         if (itemPickup != null)
         {
             if (AddItem(itemPickup.Item))
             {
-                Debug.Log($"Picked up: {itemPickup.Item.ItemName}");
+                Debug.Log($"PlayerInventoryController: Picked up {itemPickup.Item.ItemName}");
                 itemPickup.OnItemPickedUp();
             }
             else
             {
-                Debug.Log("Inventory is full!");
+                Debug.Log("PlayerInventoryController: Inventory is full!");
             }
         }
     }

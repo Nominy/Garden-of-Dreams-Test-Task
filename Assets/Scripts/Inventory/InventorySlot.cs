@@ -9,6 +9,7 @@ public class InventorySlot : MonoBehaviour, IPointerClickHandler
     [SerializeField] private Image itemImage;
     [SerializeField] private Image backgroundImage;
     [SerializeField] private TextMeshProUGUI quantityText;
+    [SerializeField] private Button deleteButton;
     
     [Header("Visual Settings")]
     [SerializeField] private Color normalBackgroundColor = Color.white;
@@ -35,6 +36,9 @@ public class InventorySlot : MonoBehaviour, IPointerClickHandler
         
         if (quantityText == null)
             quantityText = GetComponentInChildren<TextMeshProUGUI>();
+
+        // Removed programmatic listener setup for deleteButton.
+        // Please assign OnDeleteButtonPressed to the button's OnClick event in the Unity Inspector.
         
         ClearSlot();
     }
@@ -53,7 +57,6 @@ public class InventorySlot : MonoBehaviour, IPointerClickHandler
             itemImage.color = Color.white;
             itemImage.enabled = true;
             
-            // Update quantity text
             if (quantityText != null)
             {
                 if (currentItem.Quantity > 1)
@@ -67,12 +70,33 @@ public class InventorySlot : MonoBehaviour, IPointerClickHandler
                 }
             }
         }
-        else
+        else // currentItem is null
         {
-            ClearSlot();
+            // Logic for clearing the visual elements of the slot when item is null
+            // This is mostly covered by ClearSlot, but we need to handle image and text specifically here
+            // if they weren't cleared by an explicit ClearSlot() call before a refresh.
+            if (itemImage != null)
+            {
+                itemImage.sprite = null;
+                itemImage.color = emptySlotColor;
+                itemImage.enabled = false;
+            }
+            
+            if (quantityText != null)
+            {
+                quantityText.text = "";
+                quantityText.enabled = false;
+            }
+            // If currentItem is null, it's effectively an empty slot, so ensure selection logic reflects this.
+            // If it was selected, and item removed, it should behave like an empty selected slot.
         }
         
-        UpdateVisuals();
+        // Update visuals for background and delete button visibility
+        UpdateVisuals(); 
+        if (deleteButton != null)
+        {
+            deleteButton.gameObject.SetActive(isSelected && HasItem);
+        }
     }
     
     public void ClearSlot()
@@ -92,14 +116,18 @@ public class InventorySlot : MonoBehaviour, IPointerClickHandler
             quantityText.enabled = false;
         }
         
-        SetSelected(false);
-        UpdateVisuals();
+        SetSelected(false); // This will also hide delete button and call UpdateVisuals()
     }
     
     public void SetSelected(bool selected)
     {
         isSelected = selected;
         UpdateVisuals();
+
+        if (deleteButton != null)
+        {
+            deleteButton.gameObject.SetActive(isSelected && HasItem);
+        }
     }
     
     private void UpdateVisuals()
@@ -115,6 +143,15 @@ public class InventorySlot : MonoBehaviour, IPointerClickHandler
         if (inventorySystem != null)
         {
             inventorySystem.OnSlotClicked(this);
+        }
+    }
+
+    public void OnDeleteButtonPressed()
+    {
+        if (inventorySystem != null && HasItem)
+        {
+            inventorySystem.RequestDeleteItemInSlot(this);
+            // InventorySystem should then call ClearSlot() on this slot
         }
     }
 } 
