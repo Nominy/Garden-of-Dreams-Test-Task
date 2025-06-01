@@ -349,36 +349,48 @@ public class PauseMenuUI : MonoBehaviour
     // Settings methods
     private void OnVolumeChanged(float value)
     {
-        AudioListener.volume = value;
         SaveSettings();
     }
     
     private void OnFullscreenChanged(bool fullscreen)
     {
-        Screen.fullScreen = fullscreen;
         SaveSettings();
     }
     
     private void LoadSettings()
     {
+        if (SaveManager.Instance == null) 
+        {
+            Debug.LogWarning("SaveManager not found. Cannot load settings.");
+            // Optionally set UI to default values here if SaveManager might not exist yet
+            if (volumeSlider != null) volumeSlider.value = 1f;
+            if (fullscreenToggle != null) fullscreenToggle.isOn = true;
+            return;
+        }
+
         // Load volume
-        float volume = PlayerPrefs.GetFloat("Volume", 1f);
-        AudioListener.volume = volume;
+        float volume = SaveManager.Instance.GetCurrentVolume();
         if (volumeSlider != null)
             volumeSlider.value = volume;
         
         // Load fullscreen
-        bool fullscreen = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
-        Screen.fullScreen = fullscreen;
+        bool fullscreen = SaveManager.Instance.IsCurrentFullscreen();
         if (fullscreenToggle != null)
             fullscreenToggle.isOn = fullscreen;
     }
     
     private void SaveSettings()
     {
-        PlayerPrefs.SetFloat("Volume", AudioListener.volume);
-        PlayerPrefs.SetInt("Fullscreen", Screen.fullScreen ? 1 : 0);
-        PlayerPrefs.Save();
+        if (SaveManager.Instance == null) 
+        {
+            Debug.LogWarning("SaveManager not found. Cannot save settings.");
+            return;
+        }
+
+        float volume = (volumeSlider != null) ? volumeSlider.value : AudioListener.volume;
+        bool fullscreen = (fullscreenToggle != null) ? fullscreenToggle.isOn : Screen.fullScreen;
+
+        SaveManager.Instance.UpdateAndSaveSettings(volume, fullscreen);
     }
     
     private void PlayButtonSound()

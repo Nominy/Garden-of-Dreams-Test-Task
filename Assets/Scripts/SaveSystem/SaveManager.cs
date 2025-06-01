@@ -42,6 +42,10 @@ public class SaveManager : MonoBehaviour
     private string SaveFilePath => Path.Combine(Application.persistentDataPath, saveFileName);
     private float gameStartTime;
     
+    // Current game settings - loaded at Awake, updated by UI
+    private float currentVolume = 1.0f;
+    private bool currentFullscreen = true;
+    
     private void Awake()
     {
         if (instance != null && instance != this)
@@ -53,6 +57,91 @@ public class SaveManager : MonoBehaviour
         instance = this;
         DontDestroyOnLoad(gameObject);
         gameStartTime = Time.time;
+
+        // Load settings on awake, or use defaults if no save file
+        LoadGlobalSettings();
+    }
+
+    private void LoadGlobalSettings()
+    {
+        if (HasSaveFile())
+        {
+            try
+            {
+                string jsonData = File.ReadAllText(SaveFilePath);
+                SaveData saveData = JsonUtility.FromJson<SaveData>(jsonData);
+                currentVolume = saveData.settingsVolume;
+                currentFullscreen = saveData.settingsIsFullscreen;
+
+                AudioListener.volume = currentVolume;
+                Screen.fullScreen = currentFullscreen;
+
+                if (enableDebugLogs)
+                    Debug.Log($"Global settings loaded: Volume={currentVolume}, Fullscreen={currentFullscreen}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to load global settings from save file: {e.Message}. Using defaults.");
+                // Apply defaults if loading fails
+                ApplyDefaultSettings();
+            }
+        }
+        else
+        {
+            // Apply defaults if no save file
+            ApplyDefaultSettings();
+            if (enableDebugLogs)
+                Debug.Log("No save file found. Applied default global settings.");
+        }
+    }
+
+    private void ApplyDefaultSettings()
+    {
+        currentVolume = 1.0f; // Default volume
+        currentFullscreen = true; // Default fullscreen state (can be platform dependent)
+        AudioListener.volume = currentVolume;
+        Screen.fullScreen = currentFullscreen;
+    }
+
+    public float GetCurrentVolume() => currentVolume;
+    public bool IsCurrentFullscreen() => currentFullscreen;
+
+    public void UpdateAndSaveSettings(float volume, bool fullscreen)
+    {
+        currentVolume = volume;
+        currentFullscreen = fullscreen;
+
+        AudioListener.volume = currentVolume;
+        Screen.fullScreen = currentFullscreen;
+
+        // Save all game data, including these new settings
+        // This mimics PlayerPrefs.Save() immediate behavior
+        SaveData saveData = HasSaveFile() ? JsonUtility.FromJson<SaveData>(File.ReadAllText(SaveFilePath)) : new SaveData();
+        
+        // Update settings in the existing or new SaveData object
+        saveData.settingsVolume = currentVolume;
+        saveData.settingsIsFullscreen = currentFullscreen;
+
+        // If it's a new save data (no file existed), populate other essential fields before saving
+        if (!HasSaveFile())
+        {
+            saveData.currentScene = SceneManager.GetActiveScene().name;
+            saveData.timePlayed = Time.time - gameStartTime; // Or 0 if preferred for a settings-only save
+            // Note: This save won't include ISaveable object data unless SaveGame() is explicitly called
+        }
+
+        try
+        {
+            string jsonData = JsonUtility.ToJson(saveData, true);
+            File.WriteAllText(SaveFilePath, jsonData);
+            if (enableDebugLogs)
+                Debug.Log($"Settings updated and game data saved. Volume: {currentVolume}, Fullscreen: {currentFullscreen}");
+        }
+        catch (Exception e)
+        { 
+            Debug.LogError($"Failed to save settings: {e.Message}");
+            OnSaveError?.Invoke($"Failed to save settings: {e.Message}");
+        }
     }
     
     /// <summary>
@@ -63,6 +152,10 @@ public class SaveManager : MonoBehaviour
         try
         {
             SaveData saveData = CollectSaveData();
+            // Ensure current settings are part of this save operation
+            saveData.settingsVolume = currentVolume;
+            saveData.settingsIsFullscreen = currentFullscreen;
+
             string jsonData = JsonUtility.ToJson(saveData, true);
             
             File.WriteAllText(SaveFilePath, jsonData);
@@ -97,6 +190,14 @@ public class SaveManager : MonoBehaviour
             string jsonData = File.ReadAllText(SaveFilePath);
             SaveData saveData = JsonUtility.FromJson<SaveData>(jsonData);
             
+            // Apply loaded settings first
+            currentVolume = saveData.settingsVolume;
+            currentFullscreen = saveData.settingsIsFullscreen;
+            AudioListener.volume = currentVolume;
+            Screen.fullScreen = currentFullscreen;
+            if(enableDebugLogs)
+                Debug.Log($"Settings applied from loaded game: Volume={currentVolume}, Fullscreen={currentFullscreen}");
+
             ApplySaveData(saveData);
             
             if (enableDebugLogs)
@@ -180,6 +281,10 @@ public class SaveManager : MonoBehaviour
         // Basic game info
         saveData.currentScene = SceneManager.GetActiveScene().name;
         saveData.timePlayed = Time.time - gameStartTime;
+        
+        // Add current settings to the save data
+        saveData.settingsVolume = currentVolume;
+        saveData.settingsIsFullscreen = currentFullscreen;
         
         // Collect data from all ISaveable objects
         var saveableObjects = FindObjectsOfType<MonoBehaviour>().OfType<ISaveable>();

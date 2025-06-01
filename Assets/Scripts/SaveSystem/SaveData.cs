@@ -14,6 +14,10 @@ public class SaveData
     public float timePlayed;
     public string currentScene;
 
+    // Game Settings
+    public float settingsVolume = 1.0f;
+    public bool settingsIsFullscreen = true;
+
     // Strongly-typed collections for saveable entities
     public PlayerSaveDataDetailed playerDetailedData; // Assuming single player
     public List<BasicEnemySaveData> enemySaveDataList = new List<BasicEnemySaveData>();
